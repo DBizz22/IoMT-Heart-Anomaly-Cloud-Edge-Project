@@ -1,0 +1,62 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: iomt-trainer-job
+  namespace: iomt-ray
+spec:
+  shutdownAfterJobFinishes: false
+  ttlSecondsAfterFinished: 300
+  entrypoint: python /app/trainer_API.py --config /app/config.yaml
+  runtimeEnvYAML: |
+    env_vars:
+      OTEL_SERVICE_NAME: iomt-training
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+  rayClusterSpec:
+    rayVersion: "2.46.0"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: iomt-ray-ml:latest
+              imagePullPolicy: IfNotPresent
+              ports:
+                - containerPort: 6379
+                  name: gcs
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
+                - containerPort: 8080
+                  name: metrics
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "2Gi"
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"
+    workerGroupSpecs:
+      - groupName: small-group
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 2
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: iomt-ray-ml:latest
+                imagePullPolicy: IfNotPresent
+                resources:
+                  requests:
+                    cpu: "1"
+                    memory: "2Gi"
+                  limits:
+                    cpu: "2"
+                    memory: "4Gi"

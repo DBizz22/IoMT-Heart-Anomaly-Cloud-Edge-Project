@@ -1,0 +1,76 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: iomt-inference-service
+  namespace: iomt-ray
+spec:
+  serviceUnhealthySecondThreshold: 300
+  deploymentUnhealthySecondThreshold: 300
+  serveConfigV2: |
+    applications:
+      - name: mlflow-predict-api
+        import_path: prediction_API:build_deployment
+        route_prefix: /
+        runtime_env:
+          env_vars:
+            MODEL_URI: models:/HeartDiseaseRandomForestTuned@champion
+            MLFLOW_TRACKING_URI: http://mlflow.mlflow.svc.cluster.local:5000
+            OTEL_SERVICE_NAME: iomt-inference
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4317
+            OTEL_EXPORTER_OTLP_INSECURE: "true"
+        args:
+          model_uri: models:/HeartDiseaseRandomForestTuned@champion
+          tracking_uri: http://mlflow.mlflow.svc.cluster.local:5000
+        deployments:
+          - name: mlflow_predictor
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.5
+  rayClusterConfig:
+    rayVersion: "2.46.0"
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: iomt-ray-ml:latest
+              imagePullPolicy: IfNotPresent
+              ports:
+                - containerPort: 6379
+                  name: gcs
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
+                - containerPort: 8080
+                  name: metrics
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "2Gi"
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"
+    workerGroupSpecs:
+      - groupName: serve-workers
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 3
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: iomt-ray-ml:latest
+                imagePullPolicy: IfNotPresent
+                resources:
+                  requests:
+                    cpu: "500m"
+                    memory: "1Gi"
+                  limits:
+                    cpu: "2"
+                    memory: "2Gi"

@@ -1,0 +1,63 @@
+data:
+  dataset_path: "dataset/heart_failure_dataset.csv"
+  label_column: "HeartDisease"
+  test_size: 0.2
+  split_seed: 42
+
+encoding:
+  # Explicit ordinal relationships (low -> high)
+  ordinal_mappings:
+    ChestPainType: ["ASY", "NAP", "ATA", "TA"]
+    ST_Slope: ["Up", "Flat", "Down"]
+    RestingECG: ["Normal", "ST", "LVH"]
+  drop_first_baseline: true
+
+preprocessing:
+  scale_enabled: true
+  # If true, process as a single batch before split for stable one-hot columns
+  process_full_dataset_single_batch: false
+  # Used only when process_full_dataset_single_batch=false
+  map_batches_size: 2048
+
+ray:
+  auto_init: true
+  ignore_reinit_error: true
+  log_to_driver: false
+  configure_logging: true
+  logging_level: "CRITICAL"
+  data_verbose_progress: false
+
+training:
+  xgboost:
+    num_workers: 1
+    use_gpu: false
+    resources_per_worker: null
+    max_boost_rounds: 500
+    num_samples: 16
+    max_concurrent_trials : 2
+    fbeta_beta: 1.2
+    decision_threshold: 0.55
+    max_depth_range: [3, 8]
+    min_child_weight_values: [2, 4, 6, 8]
+    subsample_range: [0.7, 1.0]
+    colsample_bytree_values: [0.7, 0.85, 1.0]
+    eta_log_range: [0.003, 0.08]
+    gamma_values: [0.0, 0.5, 1.0]
+    reg_lambda_values: [1.0, 2.0, 5.0, 10.0]
+    reg_alpha_values: [0.0, 0.1, 0.5]
+    scale_pos_weight_values: [1.0, 1.2, 1.4, 1.6]
+    num_boost_round_values: [200, 400, 600]
+    objective: "binary:logistic"
+    eval_metric: ["logloss", "error"]
+    metric_name: "validation-fbeta12"
+    metric_mode: "max"
+    scheduler_grace_period: 10
+    scheduler_reduction_factor: 3
+    run_name: "HeartDisease_prediction_xgboost"
+    storage_path: "results/HeartDisease_prediction_xgboost"
+    checkpoints_to_keep: 3
+
+evaluation:
+  xgboost_threshold: 0.5
+  xgboost_top_n: 3
+  xgboost_model_filename: "model.ubj"

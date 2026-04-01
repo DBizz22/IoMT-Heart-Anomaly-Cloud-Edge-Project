@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-config
+  namespace: observability
+data:
+  mimir.yaml: |
+    multitenancy_enabled: false
+    server:
+      http_listen_port: 9009
+      log_level: info
+    common:
+      storage:
+        backend: filesystem
+        filesystem:
+          dir: /data/tsdb
+    blocks_storage:
+      backend: filesystem
+      filesystem:
+        dir: /data/blocks
+      bucket_store:
+        sync_dir: /data/tsdb-sync
+    compactor:
+      data_dir: /data/compactor
+    ruler_storage:
+      backend: filesystem
+      filesystem:
+        dir: /data/ruler
+    ingester:
+      ring:
+        replication_factor: 1
+    limits:
+      max_global_series_per_user: 200000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mimir
+  namespace: observability
+spec:
+  serviceName: mimir
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mimir
+  template:
+    metadata:
+      labels:
+        app: mimir
+    spec:
+      containers:
+        - name: mimir
+          image: grafana/mimir:2.14.2
+          args:
+            - -target=all
+            - -config.file=/etc/mimir/mimir.yaml
+          ports:
+            - name: http
+              containerPort: 9009
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mimir
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mimir
+  namespace: observability
+spec:
+  selector:
+    app: mimir
+  ports:
+    - name: http
+      port: 9009
+      targetPort: 9009
